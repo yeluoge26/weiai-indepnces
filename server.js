@@ -355,6 +355,122 @@ async function createTables() {
       )
     `);
 
+    // 角色市場上架表
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS characterListings (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        characterId INT NOT NULL,
+        sellerId INT NOT NULL,
+        price INT NOT NULL,
+        description TEXT,
+        status ENUM('active', 'sold', 'delisted') DEFAULT 'active',
+        salesCount INT DEFAULT 0,
+        totalRevenue INT DEFAULT 0,
+        rating DECIMAL(3,2) DEFAULT 0,
+        reviewCount INT DEFAULT 0,
+        createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        UNIQUE KEY unique_listing (characterId, sellerId)
+      )
+    `);
+
+    // 角色購買記錄表
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS characterPurchases (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        listingId INT NOT NULL,
+        buyerId INT NOT NULL,
+        characterId INT NOT NULL,
+        sellerId INT NOT NULL,
+        price INT NOT NULL,
+        platformFee INT NOT NULL,
+        sellerEarnings INT NOT NULL,
+        status ENUM('completed', 'refunded') DEFAULT 'completed',
+        createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (listingId) REFERENCES characterListings(id)
+      )
+    `);
+
+    // 角色評價表
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS characterReviews (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        listingId INT NOT NULL,
+        reviewerId INT NOT NULL,
+        rating INT NOT NULL,
+        comment TEXT,
+        createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (listingId) REFERENCES characterListings(id),
+        UNIQUE KEY unique_review (listingId, reviewerId)
+      )
+    `);
+
+    // 分享記錄表
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS shareRecords (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        shareId VARCHAR(32) NOT NULL UNIQUE,
+        userId INT NOT NULL,
+        sessionId INT NOT NULL,
+        format ENUM('html', 'xml', 'json') DEFAULT 'html',
+        content LONGTEXT NOT NULL,
+        viewCount INT DEFAULT 0,
+        expiresAt TIMESTAMP NULL,
+        createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // 推送訂閱表
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS userSubscriptions (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        userId INT NOT NULL,
+        endpoint VARCHAR(500) NOT NULL,
+        auth VARCHAR(255) NOT NULL,
+        p256dh VARCHAR(255) NOT NULL,
+        createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY unique_subscription (userId, endpoint)
+      )
+    `);
+
+    // 通知表
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS notifications (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        userId INT NOT NULL,
+        type VARCHAR(50) NOT NULL,
+        title VARCHAR(255) NOT NULL,
+        message TEXT NOT NULL,
+        relatedId INT,
+        isRead BOOLEAN DEFAULT FALSE,
+        createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_user_read (userId, isRead)
+      )
+    `);
+
+    // 註冊嘗試記錄表
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS registrationAttempts (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        ipAddress VARCHAR(45) NOT NULL,
+        deviceFingerprint VARCHAR(255),
+        email VARCHAR(320),
+        attemptTime TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_ip_time (ipAddress, attemptTime),
+        INDEX idx_device_time (deviceFingerprint, attemptTime)
+      )
+    `);
+
+    // 用戶主題偏好表
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS userThemePreferences (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        userId INT NOT NULL UNIQUE,
+        theme ENUM('light', 'dark', 'auto') DEFAULT 'auto',
+        updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      )
+    `);
+
     console.log('All tables created successfully');
   } finally {
     conn.release();
@@ -1876,6 +1992,41 @@ app.post('/api/wallet/recharge', authMiddleware, async (req, res) => {
   } catch (error) {
     console.error('Recharge error:', error);
     res.status(500).json({ error: '充值失败' });
+  }
+});
+
+// ==================== 主题功能 ====================
+
+// 获取用户主题偏好
+app.get('/api/user/theme', authMiddleware, async (req, res) => {
+  try {
+    const [themes] = await pool.execute(
+      'SELECT theme FROM userThemePreferences WHERE userId = ?',
+      [req.user.id]
+    );
+    res.json({ theme: themes[0]?.theme || 'auto' });
+  } catch (err) {
+    console.error('Get theme error:', err);
+    res.status(500).json({ error: { message: '获取主题失败' } });
+  }
+});
+
+// 设置用户主题偏好
+app.post('/api/user/theme', authMiddleware, async (req, res) => {
+  try {
+    const { theme } = req.body;
+    if (!['light', 'dark', 'auto'].includes(theme)) {
+      return res.status(400).json({ error: '主题无效' });
+    }
+    
+    await pool.execute(
+      'INSERT INTO userThemePreferences (userId, theme) VALUES (?, ?) ON DUPLICATE KEY UPDATE theme = ?',
+      [req.user.id, theme, theme]
+    );
+    res.json({ success: true, theme });
+  } catch (err) {
+    console.error('Set theme error:', err);
+    res.status(500).json({ error: { message: '设置主题失败' } });
   }
 });
 
