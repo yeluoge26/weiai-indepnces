@@ -2031,6 +2031,352 @@ app.post('/api/user/theme', authMiddleware, async (req, res) => {
 });
 
 // TTS API - 文字转语音
+// ==================== 角色市场功能 ====================
+
+// 上架角色
+app.post('/api/marketplace/list', authMiddleware, async (req, res) => {
+  try {
+    const { characterId, price, description } = req.body;
+    if (!characterId || !price || price < 1) {
+      return res.status(400).json({ error: '参数无效' });
+    }
+    
+    // 检查角色是否存在且属于用户
+    const [chars] = await pool.execute(
+      'SELECT id FROM aiCharacters WHERE id = ? AND userId = ?',
+      [characterId, req.user.id]
+    );
+    if (chars.length === 0) {
+      return res.status(404).json({ error: '角色不存在' });
+    }
+    
+    // 检查是否已上架
+    const [existing] = await pool.execute(
+      'SELECT id FROM characterListings WHERE characterId = ? AND sellerId = ? AND status = "active"',
+      [characterId, req.user.id]
+    );
+    if (existing.length > 0) {
+      return res.status(400).json({ error: '角色已上架' });
+    }
+    
+    const [result] = await pool.execute(
+      'INSERT INTO characterListings (characterId, sellerId, price, description) VALUES (?, ?, ?, ?)',
+      [characterId, req.user.id, price, description || '']
+    );
+    
+    res.json({ success: true, listingId: result.insertId });
+  } catch (err) {
+    console.error('List character error:', err);
+    res.status(500).json({ error: { message: '上架失败' } });
+  }
+});
+
+// 获取市场列表
+app.get('/api/marketplace/listings', async (req, res) => {
+  try {
+    const { sort = 'hot', search = '', page = 1 } = req.query;
+    const limit = 20;
+    const offset = (page - 1) * limit;
+    
+    let orderBy = 'cl.createdAt DESC';
+    if (sort === 'hot') orderBy = 'cl.salesCount DESC';
+    else if (sort === 'rating') orderBy = 'cl.rating DESC';
+    else if (sort === 'price-asc') orderBy = 'cl.price ASC';
+    else if (sort === 'price-desc') orderBy = 'cl.price DESC';
+    
+    const [listings] = await pool.execute(`
+      SELECT cl.*, ac.name, ac.avatar, u.nickname as sellerName
+      FROM characterListings cl
+      JOIN aiCharacters ac ON cl.characterId = ac.id
+      JOIN users u ON cl.sellerId = u.id
+      WHERE cl.status = 'active' AND (ac.name LIKE ? OR u.nickname LIKE ?)
+      ORDER BY ${orderBy}
+      LIMIT ? OFFSET ?
+    `, [`%${search}%`, `%${search}%`, limit, offset]);
+    
+    const [[{ total }]] = await pool.execute(
+      'SELECT COUNT(*) as total FROM characterListings WHERE status = "active"'
+    );
+    
+    res.json({
+      listings,
+      total,
+      page,
+      pages: Math.ceil(total / limit)
+    });
+  } catch (err) {
+    console.error('Get listings error:', err);
+    res.status(500).json({ error: { message: '获取列表失败' } });
+  }
+});
+
+// 购买角色
+app.post('/api/marketplace/purchase', authMiddleware, async (req, res) => {
+  try {
+    const { listingId } = req.body;
+    const buyerId = req.user.id;
+    
+    // 获取上架信息
+    const [listings] = await pool.execute(
+      'SELECT * FROM characterListings WHERE id = ? AND status = "active"',
+      [listingId]
+    );
+    if (listings.length === 0) {
+      return res.status(404).json({ error: '上架已下线' });
+    }
+    
+    const listing = listings[0];
+    if (listing.sellerId === buyerId) {
+      return res.status(400).json({ error: '不能购买自己的角色' });
+    }
+    
+    // 检查买家金币
+    const [wallets] = await pool.execute(
+      'SELECT coins FROM userWallets WHERE userId = ?',
+      [buyerId]
+    );
+    if (!wallets[0] || wallets[0].coins < listing.price) {
+      return res.status(400).json({ error: '金币不足' });
+    }
+    
+    // 计算费用
+    const platformFee = Math.floor(listing.price * 0.1);
+    const sellerEarnings = listing.price - platformFee;
+    
+    // 开始事务
+    const conn = await pool.getConnection();
+    try {
+      await conn.beginTransaction();
+      
+      // 扣除买家金币
+      await conn.execute(
+        'UPDATE userWallets SET coins = coins - ? WHERE userId = ?',
+        [listing.price, buyerId]
+      );
+      
+      // 增加卖家金币
+      await conn.execute(
+        'UPDATE userWallets SET coins = coins + ? WHERE userId = ?',
+        [sellerEarnings, listing.sellerId]
+      );
+      
+      // 记录购买
+      await conn.execute(`
+        INSERT INTO characterPurchases 
+        (listingId, buyerId, characterId, sellerId, price, platformFee, sellerEarnings)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `, [listingId, buyerId, listing.characterId, listing.sellerId, listing.price, platformFee, sellerEarnings]);
+      
+      // 更新上架信息
+      await conn.execute(`
+        UPDATE characterListings 
+        SET status = 'sold', salesCount = salesCount + 1, totalRevenue = totalRevenue + ?
+        WHERE id = ?
+      `, [sellerEarnings, listingId]);
+      
+      // 复制角色给买家
+      const [chars] = await conn.execute(
+        'SELECT * FROM aiCharacters WHERE id = ?',
+        [listing.characterId]
+      );
+      if (chars.length > 0) {
+        const char = chars[0];
+        await conn.execute(`
+          INSERT INTO aiCharacters (userId, name, avatar, description, personality, type, category)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
+        `, [buyerId, char.name, char.avatar, char.description, char.personality, 'custom', char.category]);
+      }
+      
+      await conn.commit();
+      res.json({ success: true, message: '购买成功' });
+    } catch (err) {
+      await conn.rollback();
+      throw err;
+    } finally {
+      conn.release();
+    }
+  } catch (err) {
+    console.error('Purchase error:', err);
+    res.status(500).json({ error: { message: '购买失败' } });
+  }
+});
+
+// 我的上架
+app.get('/api/marketplace/my-listings', authMiddleware, async (req, res) => {
+  try {
+    const [listings] = await pool.execute(`
+      SELECT cl.*, ac.name, ac.avatar
+      FROM characterListings cl
+      JOIN aiCharacters ac ON cl.characterId = ac.id
+      WHERE cl.sellerId = ?
+      ORDER BY cl.createdAt DESC
+    `, [req.user.id]);
+    
+    res.json({ listings });
+  } catch (err) {
+    console.error('Get my listings error:', err);
+    res.status(500).json({ error: { message: '获取列表失败' } });
+  }
+});
+
+// 我的购买
+app.get('/api/marketplace/my-purchases', authMiddleware, async (req, res) => {
+  try {
+    const [purchases] = await pool.execute(`
+      SELECT cp.*, ac.name, ac.avatar, u.nickname as sellerName
+      FROM characterPurchases cp
+      JOIN aiCharacters ac ON cp.characterId = ac.id
+      JOIN users u ON cp.sellerId = u.id
+      WHERE cp.buyerId = ?
+      ORDER BY cp.createdAt DESC
+    `, [req.user.id]);
+    
+    res.json({ purchases });
+  } catch (err) {
+    console.error('Get my purchases error:', err);
+    res.status(500).json({ error: { message: '获取列表失败' } });
+  }
+});
+
+// 卖家收入统计
+app.get('/api/marketplace/earnings', authMiddleware, async (req, res) => {
+  try {
+    const [[stats]] = await pool.execute(`
+      SELECT 
+        COUNT(DISTINCT id) as totalSales,
+        SUM(sellerEarnings) as totalEarnings,
+        COUNT(DISTINCT characterId) as uniqueCharacters
+      FROM characterPurchases
+      WHERE sellerId = ?
+    `, [req.user.id]);
+    
+    res.json({
+      totalSales: stats?.totalSales || 0,
+      totalEarnings: stats?.totalEarnings || 0,
+      uniqueCharacters: stats?.uniqueCharacters || 0
+    });
+  } catch (err) {
+    console.error('Get earnings error:', err);
+    res.status(500).json({ error: { message: '获取统计失败' } });
+  }
+});
+
+// 下架角色
+app.delete('/api/marketplace/listings/:id', authMiddleware, async (req, res) => {
+  try {
+    const [listings] = await pool.execute(
+      'SELECT * FROM characterListings WHERE id = ? AND sellerId = ?',
+      [req.params.id, req.user.id]
+    );
+    if (listings.length === 0) {
+      return res.status(404).json({ error: '上架不存在' });
+    }
+    
+    await pool.execute(
+      'UPDATE characterListings SET status = "delisted" WHERE id = ?',
+      [req.params.id]
+    );
+    
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Delist error:', err);
+    res.status(500).json({ error: { message: '下架失败' } });
+  }
+});
+
+// 编辑上架信息
+app.put('/api/marketplace/listings/:id', authMiddleware, async (req, res) => {
+  try {
+    const { price, description } = req.body;
+    
+    const [listings] = await pool.execute(
+      'SELECT * FROM characterListings WHERE id = ? AND sellerId = ?',
+      [req.params.id, req.user.id]
+    );
+    if (listings.length === 0) {
+      return res.status(404).json({ error: '上架不存在' });
+    }
+    
+    await pool.execute(
+      'UPDATE characterListings SET price = ?, description = ? WHERE id = ?',
+      [price, description, req.params.id]
+    );
+    
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Update listing error:', err);
+    res.status(500).json({ error: { message: '更新失败' } });
+  }
+});
+
+// 添加评价
+app.post('/api/marketplace/review', authMiddleware, async (req, res) => {
+  try {
+    const { listingId, rating, comment } = req.body;
+    
+    if (!listingId || !rating || rating < 1 || rating > 5) {
+      return res.status(400).json({ error: '参数无效' });
+    }
+    
+    // 检查是否已购买
+    const [purchases] = await pool.execute(
+      'SELECT id FROM characterPurchases WHERE listingId = ? AND buyerId = ?',
+      [listingId, req.user.id]
+    );
+    if (purchases.length === 0) {
+      return res.status(400).json({ error: '您未购买此角色' });
+    }
+    
+    // 检查是否已评价
+    const [existing] = await pool.execute(
+      'SELECT id FROM characterReviews WHERE listingId = ? AND reviewerId = ?',
+      [listingId, req.user.id]
+    );
+    if (existing.length > 0) {
+      return res.status(400).json({ error: '您已评价过此角色' });
+    }
+    
+    await pool.execute(
+      'INSERT INTO characterReviews (listingId, reviewerId, rating, comment) VALUES (?, ?, ?, ?)',
+      [listingId, req.user.id, rating, comment || '']
+    );
+    
+    // 更新上架的评分
+    const [[stats]] = await pool.execute(`
+      SELECT AVG(rating) as avgRating, COUNT(*) as reviewCount
+      FROM characterReviews
+      WHERE listingId = ?
+    `, [listingId]);
+    
+    await pool.execute(
+      'UPDATE characterListings SET rating = ?, reviewCount = ? WHERE id = ?',
+      [stats.avgRating || 0, stats.reviewCount || 0, listingId]
+    );
+    
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Review error:', err);
+    res.status(500).json({ error: { message: '评价失败' } });
+  }
+});
+
+// 获取角色评价
+app.get('/api/marketplace/reviews/:listingId', async (req, res) => {
+  try {
+    const [reviews] = await pool.execute(`
+      SELECT cr.*, u.nickname as reviewerName
+      FROM characterReviews cr
+      JOIN users u ON cr.reviewerId = u.id
+      WHERE cr.listingId = ?
+      ORDER BY cr.createdAt DESC
+    `, [req.params.listingId]);
+    
+    res.json({ reviews });
+  } catch (err) {
+    console.error('Get reviews error:', err);
+    res.status(500).json({ error: { message: '获取评价失败' } });
+  }
+});
 app.post('/api/tts/synthesize', authMiddleware, async (req, res) => {
   try {
     const { text } = req.body;
