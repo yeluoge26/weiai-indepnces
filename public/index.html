@@ -22,6 +22,46 @@
       --danger: #F44336;
       --gold: #FFD700;
     }
+    /* 暗黑模式 */
+    body.dark-mode {
+      --bg: #1a1a1a;
+      --card-bg: #2d2d2d;
+      --text: #e0e0e0;
+      --text-secondary: #b0b0b0;
+      --text-muted: #808080;
+      --border: #404040;
+    }
+    body.dark-mode .bottom-nav {
+      background: #2d2d2d;
+      border-top-color: #404040;
+    }
+    body.dark-mode .list-item {
+      background: #2d2d2d;
+    }
+    body.dark-mode .list-item:active {
+      background: #3a3a3a;
+    }
+    body.dark-mode .category-tabs {
+      background: #2d2d2d;
+    }
+    body.dark-mode .category-tab {
+      background: #404040;
+      color: #e0e0e0;
+    }
+    body.dark-mode .character-card {
+      background: #2d2d2d;
+    }
+    body.dark-mode .input {
+      background: #3a3a3a;
+      border-color: #404040;
+      color: #e0e0e0;
+    }
+    body.dark-mode .input:focus {
+      border-color: var(--primary);
+    }
+    body.dark-mode .post-moment-panel {
+      background: #2d2d2d;
+    }
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
       background: var(--bg);
@@ -275,7 +315,7 @@ async function loadShopItems(){try{const data=await api('/shop/items');state.sho
 function buyItem(itemId){showToast('支付功能开发中');}
 function renderRankingPage(){const tabs=[{id:'affinity',label:'好感榜'},{id:'chat',label:'聊天榜'},{id:'gift',label:'送礼榜'}];return `<div class="header"><span class="header-back" onclick="goBack()">‹</span><span class="header-title">排行榜</span></div><div class="rank-tabs">${tabs.map(tab=>`<div class="rank-tab ${state.rankType===tab.id?'active':''}" onclick="switchRankType('${tab.id}')">${tab.label}</div>`).join('')}</div><div class="rank-list">${state.rankings.length>0?state.rankings.map((item,index)=>`<div class="rank-item"><div class="rank-num ${index<3?'top'+(index+1):''}">${index<3?['🥇','🥈','🥉'][index]:index+1}</div><div class="avatar avatar-small">${getAvatar(item.name,item.avatar)}</div><div class="info"><div class="name">${item.name}</div><div class="value">${item.subtitle||''}</div></div><div class="score">${item.score}</div></div>`).join(''):`<div class="empty-state"><div class="icon">🏆</div><p>暂无排行数据</p><p style="font-size:13px;margin-top:8px;">快去和角色互动吧</p></div>`}</div>`;}
 function switchRankType(type){state.rankType=type;loadRankings().then(()=>render());}
-function renderSettingsPage(){return `<div class="header"><span class="header-title">我的</span></div><div class="card" style="display:flex;align-items:center;gap:16px;"><div class="avatar avatar-large">${state.user?getAvatar(state.user.username||state.user.name):'?'}</div><div style="flex:1;"><div style="font-size:18px;font-weight:600;">${state.user?.username||state.user?.name||'用户'}</div><div style="font-size:13px;color:var(--text-muted);margin-top:4px;">${state.user?.vipLevel>0?`👑 VIP${state.user.vipLevel}`:'普通用户'}</div></div></div><div class="settings-list"><div class="settings-item" onclick="navigate('vip')"><span class="icon">👑</span><span class="label">VIP会员</span><span class="value">${state.user?.vipLevel>0?'VIP'+state.user.vipLevel:'开通'}</span><span class="arrow">›</span></div><div class="settings-item" onclick="navigate('wallet')"><span class="icon">💰</span><span class="label">我的钱包</span><span class="value">${state.wallet?.coins||0} 金币</span><span class="arrow">›</span></div><div class="settings-item" onclick="navigate('checkin')"><span class="icon">📅</span><span class="label">每日签到</span><span class="arrow">›</span></div><div class="settings-item" onclick="navigate('invite')"><span class="icon">🎁</span><span class="label">邀请好友</span><span class="arrow">›</span></div></div><div class="settings-list"><div class="settings-item" onclick="navigate('myCharacters')"><span class="icon">🎭</span><span class="label">我的角色</span><span class="arrow">›</span></div><div class="settings-item" onclick="navigate('apiConfig')"><span class="icon">🔧</span><span class="label">API配置</span><span class="arrow">›</span></div><div class="settings-item" onclick="navigate('voiceSettings')"><span class="icon">🔊</span><span class="label">语音设置</span><span class="arrow">›</span></div></div><div class="settings-list"><div class="settings-item" onclick="navigate('about')"><span class="icon">ℹ️</span><span class="label">关于我们</span><span class="arrow">›</span></div><div class="settings-item" onclick="handleLogout()"><span class="icon">🚪</span><span class="label" style="color:var(--danger);">退出登录</span></div></div>${renderBottomNav('settings')}`;}
+function renderSettingsPage(){return `<div class="header"><span class="header-title">我的</span></div><div class="card" style="display:flex;align-items:center;gap:16px;"><div class="avatar avatar-large">${state.user?getAvatar(state.user.username||state.user.name):'?'}</div><div style="flex:1;"><div style="font-size:18px;font-weight:600;">${state.user?.username||state.user?.name||'用户'}</div><div style="font-size:13px;color:var(--text-muted);margin-top:4px;">${state.user?.vipLevel>0?`👑 VIP${state.user.vipLevel}`:'普通用户'}</div></div></div><div class="settings-list"><div class="settings-item" onclick="navigate('vip')"><span class="icon">👑</span><span class="label">VIP会员</span><span class="value">${state.user?.vipLevel>0?'VIP'+state.user.vipLevel:'开通'}</span><span class="arrow">›</span></div><div class="settings-item" onclick="navigate('wallet')"><span class="icon">💰</span><span class="label">我的钱包</span><span class="value">${state.wallet?.coins||0} 金币</span><span class="arrow">›</span></div><div class="settings-item" onclick="navigate('checkin')"><span class="icon">📅</span><span class="label">每日签到</span><span class="arrow">›</span></div><div class="settings-item" onclick="navigate('invite')"><span class="icon">🎁</span><span class="label">邀请好友</span><span class="arrow">›</span></div></div><div class="settings-list"><div class="settings-item" onclick="navigate('myCharacters')"><span class="icon">🎭</span><span class="label">我的角色</span><span class="arrow">›</span></div><div class="settings-item" onclick="navigate('apiConfig')"><span class="icon">🔧</span><span class="label">API配置</span><span class="arrow">›</span></div><div class="settings-item" onclick="navigate('voiceSettings')"><span class="icon">🔊</span><span class="label">语音设置</span><span class="arrow">›</span></div><div class="settings-item" onclick="showThemeSelector()"><span class="icon">🌙</span><span class="label">主题设置</span><span class="value" id="themeValue">自动</span><span class="arrow">›</span></div></div><div class="settings-list"><div class="settings-item" onclick="navigate('about')"><span class="icon">ℹ️</span><span class="label">关于我们</span><span class="arrow">›</span></div><div class="settings-item" onclick="handleLogout()"><span class="icon">🚪</span><span class="label" style="color:var(--danger);">退出登录</span></div></div>${renderBottomNav('settings')}`;}
 function handleLogout(){state.token=null;state.user=null;localStorage.removeItem('token');render();showToast('已退出登录');}
 function renderVipPage(){const levels=[{level:0,name:'普通用户',price:0,benefits:['每日10条消息','基础角色']},{level:1,name:'VIP1',price:30,benefits:['每日50条消息','解锁更多角色','专属客服']},{level:2,name:'VIP2',price:68,benefits:['每日100条消息','创建自定义角色','语音回复']},{level:3,name:'VIP3',price:128,benefits:['无限消息','所有功能解锁','优先体验新功能']}];return `<div class="header"><span class="header-back" onclick="goBack()">‹</span><span class="header-title">VIP会员</span></div><div class="vip-header"><div class="icon">👑</div><h2>${state.user?.vipLevel>0?'VIP'+state.user.vipLevel:'普通用户'}</h2><p>${state.user?.vipLevel>0?'感谢您的支持':'开通VIP享受更多特权'}</p></div><div class="vip-levels">${levels.map(l=>`<div class="vip-level ${state.user?.vipLevel===l.level?'current':''}"><div class="name">${l.name}</div><div class="price">${l.price>0?'¥'+l.price+'/月':'免费'}</div><ul style="text-align:left;font-size:12px;color:var(--text-secondary);margin-top:8px;padding-left:16px;">${l.benefits.map(b=>`<li>${b}</li>`).join('')}</ul>${l.price>0?`<button class="btn btn-gold" style="width:100%;margin-top:12px;padding:8px;" onclick="buyVip(${l.level})">开通</button>`:''}</div>`).join('')}</div>`;}
 function buyVip(level){showToast('支付功能开发中');}
@@ -295,6 +335,7 @@ async function saveApiConfig(){const provider=document.getElementById('apiProvid
 async function testApiConfig(){const provider=document.getElementById('apiProvider').value;const apiKey=document.getElementById('apiKey').value;const apiUrl=document.getElementById('apiUrl').value;if(!apiKey){showToast('请输入API Key');return;}try{await api('/user/api-config/test',{method:'POST',body:JSON.stringify({provider,apiKey,apiUrl})});showToast('连接成功！');}catch(error){showToast('连接失败：'+error.message);}}
 function renderVoiceSettingsPage(){return `<div class="header"><span class="header-back" onclick="goBack()">‹</span><span class="header-title">语音设置</span></div><div style="padding:16px;"><div class="card"><h3 style="margin-bottom:16px;">语音回复</h3><div class="settings-item" style="padding:0;border:none;"><span class="label">启用语音回复</span><input type="checkbox" id="voiceEnabled"></div></div><div class="card"><h3 style="margin-bottom:16px;">语音音色</h3><div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;">${['甜美女声','温柔男声','活泼少女','成熟御姐'].map((voice,i)=>`<div style="background:var(--bg);padding:12px;border-radius:8px;text-align:center;cursor:pointer;" onclick="selectVoice(${i})"><div style="font-size:24px;margin-bottom:4px;">🔊</div><div style="font-size:13px;">${voice}</div></div>`).join('')}</div></div></div>`;}
 function selectVoice(voiceId){showToast('语音设置功能开发中');}
+function showThemeSelector(){const currentTheme=localStorage.getItem('theme')||'auto';const options=['auto','light','dark'];const labels={'auto':'自动','light':'浅色','dark':'深色'};const buttons=options.map(opt=>`<button class="btn ${currentTheme===opt?'btn-primary':'btn-outline'}" style="flex:1;" onclick="setTheme('${opt}')">${labels[opt]}</button>`).join('');const modal=document.createElement('div');modal.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);display:flex;align-items:flex-end;z-index:1000;';modal.innerHTML=`<div style="width:100%;background:white;border-radius:16px 16px 0 0;padding:20px;max-width:480px;margin:0 auto;"><h3 style="margin-bottom:16px;">选择主题</h3><div style="display:flex;gap:12px;margin-bottom:16px;">${buttons}</div><button class="btn btn-outline" style="width:100%;" onclick="this.parentElement.parentElement.remove()">取消</button></div>`;document.body.appendChild(modal);}async function setTheme(theme){try{localStorage.setItem('theme',theme);if(theme==='auto'){const prefersDark=window.matchMedia('(prefers-color-scheme: dark)').matches;document.body.classList.toggle('dark-mode',prefersDark);}else{document.body.classList.toggle('dark-mode',theme==='dark');}if(state.token){await api('/user/theme',{method:'POST',body:JSON.stringify({theme})});}updateThemeDisplay();document.querySelector('[style*="position:fixed"]')?.remove();showToast('主题已切换');}catch(error){showToast(error.message);}}function updateThemeDisplay(){const theme=localStorage.getItem('theme')||'auto';const labels={'auto':'自动','light':'浅色','dark':'深色'};const themeValue=document.getElementById('themeValue');if(themeValue)themeValue.textContent=labels[theme];}function initTheme(){const theme=localStorage.getItem('theme')||'auto';if(theme==='auto'){const prefersDark=window.matchMedia('(prefers-color-scheme: dark)').matches;document.body.classList.toggle('dark-mode',prefersDark);}else{document.body.classList.toggle('dark-mode',theme==='dark');}updateThemeDisplay();}
 async function loadInitialData(){try{if(state.token){const [userInfo,wallet]=await Promise.all([api('/auth/me'),api('/wallet/info').catch(()=>({coins:0,points:0}))]);state.user=userInfo;state.wallet=wallet;}const characters=await api('/characters');state.characters=characters.characters||characters||[];if(state.token){const [sessions,contacts]=await Promise.all([api('/chat/sessions').catch(()=>[]),api('/contacts').catch(()=>[])]);state.sessions=sessions||[];state.contacts=contacts||[];}}catch(error){console.error('Load data error:',error);}}
 async function loadHomeData(){try{const [characters,sessions]=await Promise.all([api('/characters?limit=6'),state.token?api('/chat/sessions').catch(()=>[]):Promise.resolve([])]);state.characters=characters.characters||characters||[];state.sessions=sessions||[];}catch(error){console.error('Load home data error:',error);}}
 async function loadCharacters(){try{const characters=await api('/characters');state.characters=characters.characters||characters||[];}catch(error){console.error('Load characters error:',error);}}
@@ -305,7 +346,7 @@ async function loadGifts(){try{const gifts=await api('/gifts');state.gifts=gifts
 async function loadMoments(){try{const moments=await api('/moments');state.moments=moments||[];}catch(error){console.error('Load moments error:',error);}}
 async function loadMyCharacters(){try{const characters=await api('/characters/my');state.myCharacters=characters||[];}catch(error){console.error('Load my characters error:',error);}}
 async function loadRankings(){try{const rankings=await api(`/rankings/${state.rankType}`);state.rankings=rankings||[];}catch(error){console.error('Load rankings error:',error);state.rankings=[];}}
-async function init(){if(state.token){try{await loadInitialData();}catch(error){console.error('Init error:',error);state.token=null;localStorage.removeItem('token');}}render();}
+async function init(){initTheme();if(state.token){try{await loadInitialData();}catch(error){console.error('Init error:',error);state.token=null;localStorage.removeItem('token');}}render();}
 init();
 </script>
 </body>
