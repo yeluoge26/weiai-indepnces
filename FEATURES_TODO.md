@@ -77,3 +77,51 @@
 ---
 
 **最后更新**: 2026-01-12
+
+## ✅ 已修复问题 (2026-01-12)
+
+### 问题1: 角色头像显示问题 ✅
+- [x] 修复头像直接显示文件名的问题 - 使用DiceBear API生成头像
+- [x] 移植Manus版本的头像渲染逻辑 - 添加预设头像列表
+- [x] 添加用户创建角色时上传头像功能 - 头像选择器和随机生成
+
+### 问题2: API配置缺少自定义API ✅
+- [x] 在API配置页面添加自定义API选项
+- [x] 支持用户输入自定义API地址和密钥
+- [x] 添加API类型选择（默认/自定义）
+
+### 问题3: TTS配置缺少CosyVoice ✅
+- [x] 集成CosyVoice API - POST /api/tts/cosyvoice
+- [x] 添加CosyVoice配置选项 - TTS类型选择
+- [x] 获取可用音色 - GET /api/tts/cosyvoice/voices
+
+### 问题4: 会员管理JSON报错 ✅
+- [x] 添加VIP套餐API - GET /api/vip/packages
+- [x] 添加VIP购买API - POST /api/vip/purchase
+- [x] 添加VIP购买记录表 - vipPurchaseRecords
+
+### 问题5: 礼物管理JSON报错 ✅
+- [x] 添加礼物列表API - GET /api/gifts
+- [x] 添加发送礼物API - POST /api/gifts/send
+- [x] 添加礼物记录API - GET /api/gifts/records
+- [x] 初始化默认礼物数据 - 8种礼物
+
+### 问题6: 红包管理JSON报错 ✅
+- [x] 添加发送红包API - POST /api/redpackets/send
+- [x] 添加红包记录API - GET /api/redpackets/records
+- [x] 添加红包记录表 - redPacketRecords
+
+### 问题7: 动态管理无内容 ✅
+- [x] 添加生成测试动态API - POST /api/admin/generate-moments
+- [x] 支持指定生成数量
+- [x] 自动使用公开角色生成动态
+
+### 问题8: 管理员点击无反应 ✅
+- [x] 添加管理员页面 - renderAdminPage()
+- [x] 添加管理员路由 - case 'admin'
+- [x] 在设置页面添加管理员入口
+
+### 问题9: 系统设置点击无反应 ✅
+- [x] 添加系统设置页面 - renderSystemSettingsPage()
+- [x] 添加系统设置路由 - case 'systemSettings'
+- [x] 包含基本设置、支付设置、安全设置

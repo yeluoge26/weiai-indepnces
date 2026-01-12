@@ -587,6 +587,96 @@ async function createTables() {
       )
     `);
 
+    // 礼物表
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS gifts (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(100) NOT NULL,
+        icon VARCHAR(50),
+        price INT NOT NULL DEFAULT 1,
+        description TEXT,
+        isActive BOOLEAN DEFAULT TRUE,
+        createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // 礼物记录表
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS giftRecords (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        userId INT NOT NULL,
+        characterId INT NOT NULL,
+        giftId INT NOT NULL,
+        quantity INT DEFAULT 1,
+        totalCoins INT NOT NULL,
+        createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_user (userId),
+        INDEX idx_character (characterId)
+      )
+    `);
+
+    // 红包记录表
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS redPacketRecords (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        userId INT NOT NULL,
+        characterId INT NOT NULL,
+        amount INT NOT NULL,
+        message TEXT,
+        createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_user (userId),
+        INDEX idx_character (characterId)
+      )
+    `);
+
+    // VIP购买记录表
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS vipPurchaseRecords (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        userId INT NOT NULL,
+        level INT NOT NULL,
+        duration VARCHAR(20) NOT NULL,
+        price INT NOT NULL,
+        expireAt TIMESTAMP NOT NULL,
+        createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_user (userId)
+      )
+    `);
+
+    // 用户API配置表
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS userApiConfigs (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        userId INT NOT NULL UNIQUE,
+        apiType ENUM('default', 'custom') DEFAULT 'default',
+        customApiUrl TEXT,
+        customApiKey TEXT,
+        customModel VARCHAR(100),
+        ttsType ENUM('default', 'cosyvoice', 'custom') DEFAULT 'default',
+        cosyVoiceUrl TEXT,
+        cosyVoiceKey TEXT,
+        createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      )
+    `);
+
+    // 初始化默认礼物
+    const [existingGifts] = await conn.execute('SELECT COUNT(*) as count FROM gifts');
+    if (existingGifts[0].count === 0) {
+      await conn.execute(`
+        INSERT INTO gifts (name, icon, price, description) VALUES
+        ('小红心', '❤️', 1, '表达喜欢'),
+        ('玫瑰花', '🌹', 10, '浪漫的玫瑰'),
+        ('巧克力', '🍫', 20, '甜蜜的巧克力'),
+        ('钻石', '💎', 50, '珍贵的钻石'),
+        ('皇冠', '👑', 100, '尊贵的皇冠'),
+        ('火箭', '🚀', 500, '冲向星空'),
+        ('城堡', '🏰', 1000, '梦幻城堡'),
+        ('星球', '🌍', 5000, '送你一个星球')
+      `);
+      console.log('Default gifts created');
+    }
+
     console.log('All tables created successfully');
   } finally {
     conn.release();
@@ -2041,11 +2131,12 @@ app.delete('/api/admin/admins/:id', authMiddleware, adminMiddleware, async (req,
 // 啓動服務器
 
 // 加载新功能模块
-let featuresApi, securityApi, pushMonitorApi;
+let featuresApi, securityApi, pushMonitorApi, fixesApi;
 try {
   featuresApi = require('./features-api');
   securityApi = require('./security-api');
   pushMonitorApi = require('./push-monitor-api');
+  fixesApi = require('./fixes-api');
   console.log('✅ 新功能模块加载成功');
 } catch (err) {
   console.log('⚠️ 新功能模块加载失败:', err.message);
@@ -2086,6 +2177,9 @@ async function start() {
     }
     if (pushMonitorApi) {
       pushMonitorApi(app, pool, authMiddleware);
+    }
+    if (fixesApi) {
+      fixesApi(app, pool, authMiddleware);
     }
     
     app.listen(config.port, () => {
