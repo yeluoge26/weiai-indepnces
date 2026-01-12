@@ -471,6 +471,122 @@ async function createTables() {
       )
     `);
 
+    // ==================== 新功能数据表 ====================
+
+    // 角色市场上架表
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS characterListings (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        characterId INT NOT NULL,
+        sellerId INT NOT NULL,
+        price INT NOT NULL,
+        description TEXT,
+        status ENUM('active', 'sold', 'delisted') DEFAULT 'active',
+        salesCount INT DEFAULT 0,
+        totalRevenue INT DEFAULT 0,
+        rating DECIMAL(3,2) DEFAULT 0,
+        reviewCount INT DEFAULT 0,
+        createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_seller (sellerId),
+        INDEX idx_status (status),
+        INDEX idx_rating (rating)
+      )
+    `);
+
+    // 角色购买记录表
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS characterPurchases (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        listingId INT NOT NULL,
+        buyerId INT NOT NULL,
+        characterId INT NOT NULL,
+        sellerId INT NOT NULL,
+        price INT NOT NULL,
+        platformFee INT DEFAULT 0,
+        sellerEarnings INT DEFAULT 0,
+        createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_buyer (buyerId),
+        INDEX idx_seller (sellerId)
+      )
+    `);
+
+    // 角色评价表
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS characterReviews (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        listingId INT NOT NULL,
+        reviewerId INT NOT NULL,
+        rating INT NOT NULL,
+        comment TEXT,
+        createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_listing (listingId),
+        UNIQUE KEY unique_review (listingId, reviewerId)
+      )
+    `);
+
+    // 聊天分享表
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS chatShares (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        shareId VARCHAR(64) NOT NULL UNIQUE,
+        sessionId INT NOT NULL,
+        userId INT NOT NULL,
+        format ENUM('html', 'xml', 'json') DEFAULT 'html',
+        viewCount INT DEFAULT 0,
+        expiresAt TIMESTAMP NOT NULL,
+        createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_share (shareId),
+        INDEX idx_user (userId)
+      )
+    `);
+
+    // 推送订阅表
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS pushSubscriptions (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        subscriptionId VARCHAR(64) NOT NULL UNIQUE,
+        userId INT NOT NULL,
+        subscription TEXT NOT NULL,
+        deviceType VARCHAR(50) DEFAULT 'web',
+        createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_user (userId)
+      )
+    `);
+
+    // 推送设置表
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS pushSettings (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        userId INT NOT NULL UNIQUE,
+        enabled BOOLEAN DEFAULT TRUE,
+        newMessage BOOLEAN DEFAULT TRUE,
+        newGift BOOLEAN DEFAULT TRUE,
+        newFollower BOOLEAN DEFAULT TRUE,
+        systemNotice BOOLEAN DEFAULT TRUE,
+        quietHoursStart VARCHAR(5),
+        quietHoursEnd VARCHAR(5),
+        createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      )
+    `);
+
+    // 推送通知记录表
+    await conn.execute(`
+      CREATE TABLE IF NOT EXISTS pushNotifications (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        userId INT NOT NULL,
+        title VARCHAR(255) NOT NULL,
+        body TEXT,
+        data TEXT,
+        status ENUM('pending', 'sent', 'read', 'failed') DEFAULT 'pending',
+        createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_user (userId),
+        INDEX idx_status (status)
+      )
+    `);
+
     console.log('All tables created successfully');
   } finally {
     conn.release();
@@ -1922,7 +2038,19 @@ app.delete('/api/admin/admins/:id', authMiddleware, adminMiddleware, async (req,
   }
 });
 
-// 啟動服務器
+// 啓動服務器
+
+// 加载新功能模块
+let featuresApi, securityApi, pushMonitorApi;
+try {
+  featuresApi = require('./features-api');
+  securityApi = require('./security-api');
+  pushMonitorApi = require('./push-monitor-api');
+  console.log('✅ 新功能模块加载成功');
+} catch (err) {
+  console.log('⚠️ 新功能模块加载失败:', err.message);
+}
+
 async function start() {
   try {
     await initDatabase();
@@ -1947,6 +2075,17 @@ async function start() {
         (2, 'SVIP會員', 500, 50, 30, TRUE, TRUE, 100, 20),
         (3, 'SSVIP會員', -1, -1, -1, TRUE, TRUE, 200, 50)`);
       console.log('Created default VIP configs');
+    }
+    
+    // 初始化新功能模块
+    if (featuresApi) {
+      featuresApi(app, pool, authMiddleware);
+    }
+    if (securityApi) {
+      securityApi(app, pool, authMiddleware);
+    }
+    if (pushMonitorApi) {
+      pushMonitorApi(app, pool, authMiddleware);
     }
     
     app.listen(config.port, () => {
